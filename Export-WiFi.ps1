@@ -4,7 +4,7 @@ if (-not $isAdmin) {
     exit 1
 }
 
-$RepoUrl = "https://github.com/DilanBlue/wifi.git"
+$RepoUrl = "https://github.com/DilanBlue/wifi.git" #подставьте сами свой приватный репозиторий, инструкция на главной странице
 $Token = $env:GH_TOKEN
 
 if (-not $Token) {
